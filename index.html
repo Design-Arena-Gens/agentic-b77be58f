@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Durak Card Game</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #2d5016;
+            color: white;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        .game-info {
+            text-align: center;
+            margin: 20px 0;
+            font-size: 18px;
+        }
+
+        .deck-info {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        .trump-card {
+            display: inline-block;
+            padding: 10px 20px;
+            background: white;
+            color: black;
+            border: 2px solid black;
+            border-radius: 5px;
+            font-weight: bold;
+            margin: 10px;
+        }
+
+        .table {
+            min-height: 150px;
+            background: #1a3a0f;
+            border: 3px solid #4a4a4a;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+        }
+
+        .table h2 {
+            margin-top: 0;
+            text-align: center;
+        }
+
+        .cards-on-table {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+            justify-content: center;
+            min-height: 80px;
+        }
+
+        .card-pair {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+            align-items: center;
+        }
+
+        .card {
+            padding: 15px 25px;
+            background: white;
+            color: black;
+            border: 2px solid black;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+        }
+
+        .card:hover:not(:disabled) {
+            background: #f0f0f0;
+            transform: translateY(-3px);
+        }
+
+        .card:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .card.red {
+            color: red;
+        }
+
+        .hand {
+            margin: 20px 0;
+        }
+
+        .hand h2 {
+            margin-bottom: 10px;
+        }
+
+        .hand-cards {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+
+        .controls {
+            text-align: center;
+            margin: 20px 0;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            margin: 0 10px;
+        }
+
+        button:hover:not(:disabled) {
+            background: #45a049;
+        }
+
+        button:disabled {
+            background: #cccccc;
+            cursor: not-allowed;
+        }
+
+        .message {
+            text-align: center;
+            font-size: 20px;
+            font-weight: bold;
+            margin: 20px 0;
+            padding: 15px;
+            background: #444;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Durak</h1>
+
+    <div class="game-info">
+        <div id="gameStatus">Game starting...</div>
+    </div>
+
+    <div class="deck-info">
+        <div>Cards in deck: <span id="deckCount">36</span></div>
+        <div>Trump suit: <span id="trumpSuit" class="trump-card">-</span></div>
+    </div>
+
+    <div class="hand">
+        <h2>Computer Hand (<span id="computerCount">0</span> cards)</h2>
+        <div id="computerHand" class="hand-cards"></div>
+    </div>
+
+    <div class="table">
+        <h2>Table</h2>
+        <div id="table" class="cards-on-table"></div>
+    </div>
+
+    <div class="hand">
+        <h2>Your Hand</h2>
+        <div id="playerHand" class="hand-cards"></div>
+    </div>
+
+    <div class="controls">
+        <button id="takeBtn" onclick="takeCards()">Take Cards</button>
+        <button id="doneBtn" onclick="doneDefending()">Done Defending</button>
+        <button id="newGameBtn" onclick="newGame()">New Game</button>
+    </div>
+
+    <div id="message" class="message"></div>
+
+    <script>
+        const suits = ['♠', '♣', '♥', '♦'];
+        const ranks = ['6', '7', '8', '9', '10', 'J', 'Q', 'K', 'A'];
+        const rankValues = {'6': 6, '7': 7, '8': 8, '9': 9, '10': 10, 'J': 11, 'Q': 12, 'K': 13, 'A': 14};
+
+        let deck = [];
+        let playerHand = [];
+        let computerHand = [];
+        let table = [];
+        let trumpSuit = '';
+        let attackerIsPlayer = true;
+        let waitingForDefense = false;
+
+        function createDeck() {
+            deck = [];
+            for (let suit of suits) {
+                for (let rank of ranks) {
+                    deck.push({rank, suit});
+                }
+            }
+            return deck;
+        }
+
+        function shuffleDeck() {
+            for (let i = deck.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [deck[i], deck[j]] = [deck[j], deck[i]];
+            }
+        }
+
+        function dealCards(hand, count) {
+            for (let i = 0; i < count && deck.length > 0; i++) {
+                hand.push(deck.pop());
+            }
+        }
+
+        function cardString(card) {
+            return card.rank + card.suit;
+        }
+
+        function canBeat(attacker, defender) {
+            if (defender.suit === trumpSuit && attacker.suit !== trumpSuit) {
+                return true;
+            }
+            if (defender.suit === attacker.suit && rankValues[defender.rank] > rankValues[attacker.rank]) {
+                return true;
+            }
+            return false;
+        }
+
+        function renderHands() {
+            const playerHandDiv = document.getElementById('playerHand');
+            playerHandDiv.innerHTML = '';
+            playerHand.forEach((card, i) => {
+                const btn = document.createElement('button');
+                btn.className = 'card' + (card.suit === '♥' || card.suit === '♦' ? ' red' : '');
+                btn.textContent = cardString(card);
+                btn.onclick = () => playCard(i);
+                playerHandDiv.appendChild(btn);
+            });
+
+            const computerHandDiv = document.getElementById('computerHand');
+            computerHandDiv.innerHTML = '';
+            for (let i = 0; i < computerHand.length; i++) {
+                const btn = document.createElement('button');
+                btn.className = 'card';
+                btn.textContent = '🂠';
+                btn.disabled = true;
+                computerHandDiv.appendChild(btn);
+            }
+
+            document.getElementById('computerCount').textContent = computerHand.length;
+        }
+
+        function renderTable() {
+            const tableDiv = document.getElementById('table');
+            tableDiv.innerHTML = '';
+
+            for (let i = 0; i < table.length; i++) {
+                const pair = table[i];
+                const pairDiv = document.createElement('div');
+                pairDiv.className = 'card-pair';
+
+                const attackCard = document.createElement('div');
+                attackCard.className = 'card' + (pair.attacker.suit === '♥' || pair.attacker.suit === '♦' ? ' red' : '');
+                attackCard.textContent = cardString(pair.attacker);
+                pairDiv.appendChild(attackCard);
+
+                if (pair.defender) {
+                    const defenseCard = document.createElement('div');
+                    defenseCard.className = 'card' + (pair.defender.suit === '♥' || pair.defender.suit === '♦' ? ' red' : '');
+                    defenseCard.textContent = cardString(pair.defender);
+                    pairDiv.appendChild(defenseCard);
+                }
+
+                tableDiv.appendChild(pairDiv);
+            }
+        }
+
+        function renderGame() {
+            renderHands();
+            renderTable();
+            document.getElementById('deckCount').textContent = deck.length;
+            document.getElementById('trumpSuit').textContent = trumpSuit;
+
+            const takeBtn = document.getElementById('takeBtn');
+            const doneBtn = document.getElementById('doneBtn');
+
+            if (attackerIsPlayer || !waitingForDefense) {
+                takeBtn.disabled = true;
+                doneBtn.disabled = true;
+            } else {
+                takeBtn.disabled = false;
+                const allDefended = table.every(pair => pair.defender !== null);
+                doneBtn.disabled = !allDefended;
+            }
+        }
+
+        function playCard(index) {
+            if (attackerIsPlayer) {
+                attackCard(playerHand[index], index);
+            } else {
+                defendCard(playerHand[index], index);
+            }
+        }
+
+        function attackCard(card, index) {
+            if (table.length > 0) {
+                const ranksOnTable = new Set();
+                table.forEach(pair => {
+                    ranksOnTable.add(pair.attacker.rank);
+                    if (pair.defender) ranksOnTable.add(pair.defender.rank);
+                });
+                if (!ranksOnTable.has(card.rank)) {
+                    showMessage('Can only attack with ranks already on table');
+                    return;
+                }
+            }
+
+            if (table.length >= computerHand.length) {
+                showMessage('Cannot attack with more cards than defender has');
+                return;
+            }
+
+            table.push({attacker: card, defender: null});
+            playerHand.splice(index, 1);
+            waitingForDefense = true;
+            renderGame();
+            showMessage('Computer is defending...');
+
+            setTimeout(computerDefend, 1000);
+        }
+
+        function defendCard(card, index) {
+            const undefendedPair = table.find(pair => pair.defender === null);
+
+            if (!undefendedPair) {
+                showMessage('All cards already defended');
+                return;
+            }
+
+            if (!canBeat(undefendedPair.attacker, card)) {
+                showMessage('Card cannot beat the attacker');
+                return;
+            }
+
+            undefendedPair.defender = card;
+            playerHand.splice(index, 1);
+            renderGame();
+
+            const allDefended = table.every(pair => pair.defender !== null);
+            if (allDefended) {
+                showMessage('All defended! Computer may add more cards or pass');
+                setTimeout(computerContinueAttack, 1000);
+            }
+        }
+
+        function computerDefend() {
+            const undefendedPair = table.find(pair => pair.defender === null);
+            if (!undefendedPair) return;
+
+            let bestDefense = null;
+            let bestIndex = -1;
+            let bestValue = Infinity;
+
+            for (let i = 0; i < computerHand.length; i++) {
+                const card = computerHand[i];
+                if (canBeat(undefendedPair.attacker, card)) {
+                    const value = rankValues[card.rank] + (card.suit === trumpSuit ? 100 : 0);
+                    if (value < bestValue) {
+                        bestValue = value;
+                        bestDefense = card;
+                        bestIndex = i;
+                    }
+                }
+            }
+
+            if (bestDefense) {
+                undefendedPair.defender = bestDefense;
+                computerHand.splice(bestIndex, 1);
+                renderGame();
+
+                const allDefended = table.every(pair => pair.defender !== null);
+                if (allDefended) {
+                    showMessage('All defended! You may add more cards');
+                    waitingForDefense = false;
+                } else {
+                    showMessage('Computer is defending...');
+                    setTimeout(computerDefend, 1000);
+                }
+            } else {
+                showMessage('Computer takes the cards');
+                setTimeout(() => {
+                    computerHand.push(...table.flatMap(p => [p.attacker, p.defender].filter(c => c)));
+                    table = [];
+                    refillHands();
+                    attackerIsPlayer = true;
+                    waitingForDefense = false;
+                    checkGameOver();
+                }, 1500);
+            }
+        }
+
+        function computerContinueAttack() {
+            if (table.length >= playerHand.length) {
+                endRound();
+                return;
+            }
+
+            const ranksOnTable = new Set();
+            table.forEach(pair => {
+                ranksOnTable.add(pair.attacker.rank);
+                if (pair.defender) ranksOnTable.add(pair.defender.rank);
+            });
+
+            let attackCard = null;
+            let attackIndex = -1;
+
+            for (let i = 0; i < computerHand.length; i++) {
+                if (ranksOnTable.has(computerHand[i].rank)) {
+                    attackCard = computerHand[i];
+                    attackIndex = i;
+                    break;
+                }
+            }
+
+            if (attackCard) {
+                table.push({attacker: attackCard, defender: null});
+                computerHand.splice(attackIndex, 1);
+                renderGame();
+                showMessage('Computer added another card! Defend it');
+                waitingForDefense = true;
+            } else {
+                endRound();
+            }
+        }
+
+        function computerAttack() {
+            if (table.length >= playerHand.length) {
+                return;
+            }
+
+            if (table.length > 0) {
+                const ranksOnTable = new Set();
+                table.forEach(pair => {
+                    ranksOnTable.add(pair.attacker.rank);
+                    if (pair.defender) ranksOnTable.add(pair.defender.rank);
+                });
+
+                for (let i = 0; i < computerHand.length; i++) {
+                    if (ranksOnTable.has(computerHand[i].rank)) {
+                        const card = computerHand[i];
+                        table.push({attacker: card, defender: null});
+                        computerHand.splice(i, 1);
+                        waitingForDefense = true;
+                        renderGame();
+                        showMessage('Your turn to defend');
+                        return;
+                    }
+                }
+            } else {
+                const card = computerHand[0];
+                table.push({attacker: card, defender: null});
+                computerHand.shift();
+                waitingForDefense = true;
+                renderGame();
+                showMessage('Your turn to defend');
+            }
+        }
+
+        function takeCards() {
+            playerHand.push(...table.flatMap(p => [p.attacker, p.defender].filter(c => c)));
+            table = [];
+            refillHands();
+            attackerIsPlayer = false;
+            waitingForDefense = false;
+            checkGameOver();
+        }
+
+        function doneDefending() {
+            endRound();
+        }
+
+        function endRound() {
+            table = [];
+            refillHands();
+            attackerIsPlayer = !attackerIsPlayer;
+            waitingForDefense = false;
+            checkGameOver();
+
+            if (!attackerIsPlayer && computerHand.length > 0 && playerHand.length > 0) {
+                showMessage('Computer is attacking...');
+                setTimeout(computerAttack, 1000);
+            }
+        }
+
+        function refillHands() {
+            if (deck.length === 0) {
+                renderGame();
+                return;
+            }
+
+            const attacker = attackerIsPlayer ? playerHand : computerHand;
+            const defender = attackerIsPlayer ? computerHand : playerHand;
+
+            while (attacker.length < 6 && deck.length > 0) {
+                attacker.push(deck.pop());
+            }
+            while (defender.length < 6 && deck.length > 0) {
+                defender.push(deck.pop());
+            }
+
+            renderGame();
+        }
+
+        function checkGameOver() {
+            if (deck.length === 0) {
+                if (playerHand.length === 0) {
+                    showMessage('YOU WIN!');
+                    document.getElementById('takeBtn').disabled = true;
+                    document.getElementById('doneBtn').disabled = true;
+                    return true;
+                }
+                if (computerHand.length === 0) {
+                    showMessage('COMPUTER WINS!');
+                    document.getElementById('takeBtn').disabled = true;
+                    document.getElementById('doneBtn').disabled = true;
+                    return true;
+                }
+            }
+
+            if (attackerIsPlayer && playerHand.length > 0) {
+                showMessage('Your turn to attack');
+            } else if (!attackerIsPlayer && computerHand.length > 0 && table.length === 0) {
+                showMessage('Computer is attacking...');
+                setTimeout(computerAttack, 1000);
+            } else if (table.length === 0) {
+                showMessage('Waiting...');
+            }
+
+            return false;
+        }
+
+        function showMessage(msg) {
+            document.getElementById('message').textContent = msg;
+        }
+
+        function newGame() {
+            createDeck();
+            shuffleDeck();
+            trumpSuit = deck[0].suit;
+            playerHand = [];
+            computerHand = [];
+            table = [];
+            dealCards(playerHand, 6);
+            dealCards(computerHand, 6);
+            attackerIsPlayer = true;
+            waitingForDefense = false;
+            renderGame();
+            showMessage('Your turn to attack');
+        }
+
+        newGame();
+    </script>
+</body>
+</html>
